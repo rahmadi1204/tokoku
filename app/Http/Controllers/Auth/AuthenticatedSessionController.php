@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
+use App\Models\Setting\LogActivity;
 use App\Providers\RouteServiceProvider;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -31,6 +32,11 @@ class AuthenticatedSessionController extends Controller
         $request->authenticate();
 
         $request->session()->regenerate();
+        LogActivity::insert([
+            'date' => now(),
+            'user' => auth()->user()->name,
+            'activity' => 'login',
+        ]);
 
         return redirect()->intended(RouteServiceProvider::HOME);
     }
@@ -43,6 +49,11 @@ class AuthenticatedSessionController extends Controller
      */
     public function destroy(Request $request)
     {
+        LogActivity::insert([
+            'date' => now(),
+            'user' => auth()->user()->name,
+            'activity' => 'logout',
+        ]);
         Auth::guard('web')->logout();
 
         $request->session()->invalidate();

@@ -7,8 +7,10 @@ use Illuminate\Http\Request;
 use App\Models\Setting\AppData;
 use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\Controller;
+use App\Models\Setting\LogActivity;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use Spatie\Permission\Models\Role;
 
 class AppController extends Controller
 {
@@ -16,9 +18,8 @@ class AppController extends Controller
     {
         $title = "Setting";
         $data = AppData::first();
-        $access = User::with('roles')->get();
-        // dd($access);
-        return view('page.setting', compact(['title', 'data', 'access']));
+        $logs = LogActivity::all();
+        return view('page.setting', compact(['title', 'data', 'logs']));
     }
     public function appName()
     {
@@ -41,14 +42,23 @@ class AppController extends Controller
     {
         DB::beginTransaction();
         try {
-            AppData::where('id', 1)->update([
-                'name' => $request->app_name,
-            ]);
+            $name =  AppData::where('id', 1)->value('name');
+            if ($name != $request->app_name) {
+                AppData::where('id', 1)->update([
+                    'name' => $request->app_name,
+                ]);
+                $activity = "update app name";
+                $log = new AppController;
+                $log->logActivity($activity);
+            }
             $cek = Hash::check($request->old_password, auth()->user()->password);
             if ($cek) {
                 User::where('id', auth()->user()->id)->update([
                     'password' => bcrypt($request->password),
                 ]);
+                $activity = "update password";
+                $log = new AppController;
+                $log->logActivity($activity);
             }
             DB::commit();
             if ($cek) {
@@ -67,17 +77,28 @@ class AppController extends Controller
             'app_logo' => 'required|mimes:png,jpg,jpeg,svg',
         ]);
         DB::beginTransaction();
-        // try {
-        $imageName = 'logo.' . $request->app_logo->extension();
-        Storage::putFileAs('images/app', $request->file('app_logo'),  $imageName);
-        AppData::where('id', 1)->update([
-            'logo' => $imageName,
+        try {
+            $imageName = 'logo.' . $request->app_logo->extension();
+            Storage::putFileAs('images/app', $request->file('app_logo'),  $imageName);
+            AppData::where('id', 1)->update([
+                'logo' => $imageName,
+            ]);
+            $activity = "update app logo";
+            $log = new AppController;
+            $log->logActivity($activity);
+            DB::commit();
+            return redirect()->back()->with('success', 'Logo Berhasil Diupload');
+        } catch (\Throwable $th) {
+            DB::rollBack();
+            return redirect()->back()->with('error', 'Gagal');
+        }
+    }
+    public function logActivity($activity)
+    {
+        LogActivity::insert([
+            'user' => auth()->user()->name,
+            'activity' => $activity,
+            'date' => now(),
         ]);
-        DB::commit();
-        return redirect()->back()->with('success', 'Logo Berhasil Diupload');
-        // } catch (\Throwable $th) {
-        DB::rollBack();
-        return redirect()->back()->with('error', 'Gagal');
-        // }
     }
 }
